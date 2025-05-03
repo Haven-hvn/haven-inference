@@ -3,9 +3,9 @@ version: "2.0"
 # SDL-level Environment Variables: Define defaults, override at deploy time
 # Example override: akash tx deployment create ... --env GGUF_CID=your_real_gguf_cid --env MMPROJ_CID=your_real_mmproj_cid
 env:
-  - GGUF_CID=YOUR_GGUF_MODEL_CID_HERE    # <-- REPLACE OR OVERRIDE
-  - MMPROJ_CID=YOUR_MMPROJ_FILE_CID_HERE # <-- REPLACE OR OVERRIDE
-  - IPFS_GATEWAY=https://ipfs.io         # <-- Default IPFS Gateway (can be overridden)
+  - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci    # <-- REPLACE OR OVERRIDE
+  - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe # <-- REPLACE OR OVERRIDE
+  - IPFS_GATEWAY=.ipfs.w3s.link         # <-- Default IPFS Gateway (can be overridden)
 
 services:
   smolvlm-api:
@@ -293,8 +293,8 @@ EOF
             exit 1
           fi
 
-          GGUF_URL="$IPFS_GATEWAY/ipfs/$GGUF_CID"
-          MMPROJ_URL="$IPFS_GATEWAY/ipfs/$MMPROJ_CID"
+          GGUF_URL="https://$GGUF_CID$IPFS_GATEWAY"
+          MMPROJ_URL="https://$MMPROJ_CID$IPFS_GATEWAY"
 
           GGUF_DEST="$DEST_DIR/smolvlm.f16.gguf"
           MMPROJ_DEST="$DEST_DIR/mmproj-smolvlm.f16.gguf"
