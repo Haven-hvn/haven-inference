@@ -1,285 +1,218 @@
 version: "2.0"
 
-# SDL-level Environment Variables: Define defaults, override at deploy time
-# Example override: akash tx deployment create ... --env GGUF_CID=your_real_gguf_cid --env MMPROJ_CID=your_real_mmproj_cid
-env:
-  - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci    # <-- REPLACE OR OVERRIDE
-  - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe # <-- REPLACE OR OVERRIDE
-  - IPFS_GATEWAY=.ipfs.w3s.link         # <-- Default IPFS Gateway (can be overridden)
-
 services:
   smolvlm-api:
-    # --- Main Application Container ---
-    image: nvidia/cuda:11.8.0-devel-ubuntu22.04 # Base image with CUDA 11.8 & dev tools
+    image: nvidia/cuda:11.8.0-devel-ubuntu22.04
     env:
-      # --- Crucial for llama-cpp-python GPU build ---
       - CMAKE_ARGS=-DLLAMA_CUBLAS=on
       - FORCE_CMAKE=1
-      # --- Application Configuration (Paths point to shared volume) ---
       - MODEL_PATH=/models/smolvlm.f16.gguf
       - MMPROJ_PATH=/models/mmproj-smolvlm.f16.gguf
-      - N_GPU_LAYERS=-1 # Offload all possible layers to GPU. Adjust if memory issues occur.
+      - N_GPU_LAYERS=-1
       - N_CTX=2048
       - MODEL_ID=smolvlm-v1.8b-gguf
       - HOST=0.0.0.0
       - PORT=8000
-      # --- Optional: For better pip caching if needed ---
-      # - PIP_CACHE_DIR=/tmp/pip_cache
+      - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci    # <-- REPLACE OR OVERRIDE
+      - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe # <-- REPLACE OR OVERRIDE
+      - IPFS_GATEWAY=.ipfs.w3s.link
     command: ["sh", "-c"]
     args:
-      - |
-        set -e # Exit immediately if a command exits with a non-zero status.
-
-        # Note: Model download is now handled by the init container.
-
-        # 1. Install System Dependencies (excluding curl which was mainly for download)
+      - >-
+        set -e
         echo ">>> Installing system dependencies (main container)..."
         apt-get update
         apt-get install -y --no-install-recommends build-essential cmake python3-pip ca-certificates git
-
-        # 2. Create app directory (models directory is mounted from volume)
         echo ">>> Creating directories (main container)..."
         mkdir -p /app
         cd /app
-
-        # 3. Create requirements.txt (Removed openai, httpx, sse-starlette)
         echo ">>> Creating requirements.txt (main container)..."
-        cat <<EOF > requirements.txt
+        cat <<'EOF' > requirements.txt
         fastapi>=0.95.0
         uvicorn[standard]>=0.21.1
-        llama-cpp-python[server]>=0.2.59 # Updated for better multimodal stability & server extras; adjust if needed
-        pydantic>=1.10,<2.0 # Pin pydantic < 2.0 if llama-cpp-python needs it
+        llama-cpp-python[server]>=0.2.59
+        pydantic>=1.10,<2.0
         python-dotenv
-        # openai # Removed: Not directly used in app.py logic
-        # httpx # Removed: Likely pulled by uvicorn[standard] if needed
-        # sse-starlette # Removed: Streaming explicitly not supported
-        starlette # FastAPI dependency
-        py-cpuinfo # Dependency of llama-cpp-python
-EOF
-
-        # 4. Install Python Dependencies (CMAKE_ARGS env var will be used)
+        starlette
+        py-cpuinfo
+        EOF
         echo ">>> Installing Python dependencies (main container)..."
-        # Note: Consider --no-cache-dir if storage is tight or encountering caching issues
-        export PIP_ROOT_USER_ACTION=ignore # Silence warning about running pip as root
+        export PIP_ROOT_USER_ACTION=ignore
         pip install --upgrade pip
         pip install -r requirements.txt
-
-        # 5. Create app.py (Same Python code content as before)
         echo ">>> Creating app.py (main container)..."
-        # Note: Ensure no backticks or complex shell escapes are needed within the python code itself
         cat <<'EOF' > app.py
-import os
-import base64
-import logging
-import time # <-- Add time import for timestamp
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, VERSION as PYDANTIC_VERSION
-from typing import List, Dict, Union, Optional
-from llama_cpp import Llama, LlamaGrammar
-from llama_cpp.llama_chat_format import Llava15ChatHandler
+        import os
+        import base64
+        import logging
+        import time
+        from fastapi import FastAPI, HTTPException, Request
+        from fastapi.responses import JSONResponse
+        from pydantic import BaseModel, Field, VERSION as PYDANTIC_VERSION
+        from typing import List, Dict, Union, Optional
+        from llama_cpp import Llama, LlamaGrammar
+        from llama_cpp.llama_chat_format import Llava15ChatHandler
 
-# --- Configuration ---
-MODEL_PATH = os.getenv("MODEL_PATH", "/models/smolvlm.f16.gguf") # Path uses the mounted volume
-MMPROJ_PATH = os.getenv("MMPROJ_PATH", "/models/mmproj-smolvlm.f16.gguf") # Path uses the mounted volume
-N_GPU_LAYERS = int(os.getenv("N_GPU_LAYERS", -1)) # Default -1 for max offload
-N_CTX = int(os.getenv("N_CTX", 2048))
-# Define a model ID that clients can use (can be derived from path or fixed)
-MODEL_ID = os.getenv("MODEL_ID", "smolvlm-v1.8b-gguf")
+        MODEL_PATH = os.getenv("MODEL_PATH", "/models/smolvlm.f16.gguf")
+        MMPROJ_PATH = os.getenv("MMPROJ_PATH", "/models/mmproj-smolvlm.f16.gguf")
+        N_GPU_LAYERS = int(os.getenv("N_GPU_LAYERS", -1))
+        N_CTX = int(os.getenv("N_CTX", 2048))
+        MODEL_ID = os.getenv("MODEL_ID", "smolvlm-v1.8b-gguf")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        logger = logging.getLogger(__name__)
 
-# Pydantic V1/V2 Compatibility Helper
-def get_model_dump(model_instance):
-    if PYDANTIC_VERSION.startswith("1."):
-        return model_instance.dict()
-    else:
-        # For Pydantic v2
-        return model_instance.model_dump(exclude_unset=True)
+        def get_model_dump(model_instance):
+            if PYDANTIC_VERSION.startswith("1."):
+                return model_instance.dict()
+            else:
+                return model_instance.model_dump(exclude_unset=True)
 
+        logger.info(f"+++ Starting Model Loading +++")
+        logger.info(f"Attempting to load Llama model from: {MODEL_PATH}")
+        logger.info(f"Attempting to load mmproj from: {MMPROJ_PATH}")
+        logger.info(f"Using N_GPU_LAYERS: {N_GPU_LAYERS}")
+        logger.info(f"Using N_CTX: {N_CTX}")
 
-# --- Global Model Loading ---
-logger.info(f"+++ Starting Model Loading +++")
-logger.info(f"Attempting to load Llama model from: {MODEL_PATH}")
-logger.info(f"Attempting to load mmproj from: {MMPROJ_PATH}")
-logger.info(f"Using N_GPU_LAYERS: {N_GPU_LAYERS}")
-logger.info(f"Using N_CTX: {N_CTX}")
+        llm = None
 
-llm = None # Initialize llm as None
+        try:
+            model_dir = "/models"
+            if not os.path.exists(MODEL_PATH):
+               file_list = os.listdir(model_dir) if os.path.exists(model_dir) else 'Not Found or Empty'
+               raise FileNotFoundError(f"Model file not found at {MODEL_PATH}. Contents of {model_dir}: {file_list}")
+            if not os.path.exists(MMPROJ_PATH):
+               file_list = os.listdir(model_dir) if os.path.exists(model_dir) else 'Not Found or Empty'
+               raise FileNotFoundError(f"MMProj file not found at {MMPROJ_PATH}. Contents of {model_dir}: {file_list}")
 
-try:
-    # Check if paths exist before loading (they should, thanks to init container)
-    model_dir = "/models"
-    if not os.path.exists(MODEL_PATH):
-       file_list = os.listdir(model_dir) if os.path.exists(model_dir) else 'Not Found or Empty'
-       raise FileNotFoundError(f"Model file not found at {MODEL_PATH}. Contents of {model_dir}: {file_list}")
-    if not os.path.exists(MMPROJ_PATH):
-       file_list = os.listdir(model_dir) if os.path.exists(model_dir) else 'Not Found or Empty'
-       raise FileNotFoundError(f"MMProj file not found at {MMPROJ_PATH}. Contents of {model_dir}: {file_list}")
+            chat_handler = Llava15ChatHandler(clip_model_path=MMPROJ_PATH, verbose=True)
 
-    # Use Llava15ChatHandler for CLIP
-    chat_handler = Llava15ChatHandler(clip_model_path=MMPROJ_PATH, verbose=True)
+            llm = Llama(
+                model_path=MODEL_PATH,
+                chat_handler=chat_handler,
+                n_ctx=N_CTX,
+                n_gpu_layers=N_GPU_LAYERS,
+                logits_all=True,
+                verbose=True
+            )
+            logger.info(f"Model '{MODEL_ID}' loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load model: {e}", exc_info=True)
+            llm = None
 
-    llm = Llama(
-        model_path=MODEL_PATH,
-        chat_handler=chat_handler,
-        n_ctx=N_CTX,
-        n_gpu_layers=N_GPU_LAYERS,
-        logits_all=True, # Needed for some chat handler features potentially
-        verbose=True
-    )
-    logger.info(f"Model '{MODEL_ID}' loaded successfully.")
-except Exception as e:
-    logger.error(f"Failed to load model: {e}", exc_info=True)
-    # Don't raise here, let FastAPI start but endpoints fail gracefully
-    # raise RuntimeError(f"Could not load Llama model: {e}") from e
-    llm = None # Ensure llm remains None if loading failed
-
-
-# --- FastAPI App ---
-app = FastAPI(
-    title="SmolVLM GGUF API",
-    description="OpenAI-compatible API for SmolVLM GGUF model using llama-cpp-python",
-    version="1.0.1" # Bump version for changes
-)
-
-# --- Health Check for Model ---
-def is_model_ready():
-    return llm is not None
-
-# --- Pydantic Models for OpenAI Compatibility ---
-class ChatMessageContentPartText(BaseModel):
-    type: str = "text"
-    text: str
-
-class ImageUrl(BaseModel):
-    url: str # Expecting base64 data URI
-
-class ChatMessageContentPartImageURL(BaseModel):
-    type: str = "image_url"
-    image_url: ImageUrl # Nested model
-
-class ChatMessage(BaseModel):
-    role: str
-    content: Union[str, List[Union[ChatMessageContentPartText, ChatMessageContentPartImageURL]]]
-
-class ChatCompletionRequest(BaseModel):
-    model: str # Client specifies which model (should match MODEL_ID here)
-    messages: List[ChatMessage]
-    temperature: Optional[float] = 0.7
-    max_tokens: Optional[int] = 500
-    stream: Optional[bool] = False
-
-
-# --- OpenAI Models Endpoint Structure ---
-class ModelCard(BaseModel):
-    id: str
-    object: str = "model"
-    created: int = Field(default_factory=lambda: int(time.time())) # Using isoformat() might be more standard
-    owned_by: str = "akash-deployment"
-
-class ModelList(BaseModel):
-    object: str = "list"
-    data: List[ModelCard]
-
-# --- API Endpoints ---
-
-@app.get("/v1/models", response_model=ModelList, summary="List Available Models")
-async def list_models():
-    """Lists the models available through this API."""
-    if not is_model_ready():
-         # Readiness probe should prevent traffic here, but return empty list just in case
-         logger.warning("`/v1/models` called but model is not ready.")
-         return ModelList(data=[])
-    model_card = ModelCard(id=MODEL_ID)
-    return ModelList(data=[model_card])
-
-@app.post("/v1/chat/completions", summary="Handle VLM Chat Completions")
-async def create_chat_completion(request: ChatCompletionRequest):
-    """Handles requests compatible with OpenAI's Chat Completions API (including images)."""
-    if not is_model_ready():
-        logger.error("Chat completion request received, but model is not ready.")
-        raise HTTPException(status_code=503, detail="Model is not ready. Please try again shortly.")
-
-    if request.stream:
-        raise HTTPException(status_code=400, detail="Streaming generation is not supported.")
-
-    if request.model != MODEL_ID:
-         logger.warning(f"Request model '{request.model}' does not match loaded model '{MODEL_ID}'. Processing anyway.")
-         # Consider uncommenting if strict model matching is required:
-         # raise HTTPException(status_code=400, detail=f"Model '{request.model}' not available. Use model: '{MODEL_ID}'")
-
-    formatted_messages = []
-    for msg in request.messages:
-        if isinstance(msg.content, str):
-            formatted_messages.append({"role": msg.role, "content": msg.content})
-        else: # List of parts
-            content_parts = []
-            for part in msg.content:
-                 content_parts.append(get_model_dump(part))
-            formatted_messages.append({"role": msg.role, "content": content_parts})
-
-    try:
-        logger.info(f"Generating completion for model: {request.model}")
-        # logger.debug(f"Formatted messages: {formatted_messages}") # Uncomment for detailed debugging
-
-        completion = llm.create_chat_completion(
-            messages=formatted_messages,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            # stream=False # Explicitly false
+        app = FastAPI(
+            title="SmolVLM GGUF API",
+            description="OpenAI-compatible API for SmolVLM GGUF model using llama-cpp-python",
+            version="1.0.1"
         )
 
-        logger.info("Successfully generated completion.")
-        # logger.debug(f"Completion result: {completion}") # Uncomment for detailed debugging
+        def is_model_ready():
+            return llm is not None
 
-        return JSONResponse(content=completion)
+        class ChatMessageContentPartText(BaseModel):
+            type: str = "text"
+            text: str
 
-    except ValueError as e:
-        logger.error(f"Value error during inference: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"Invalid request data or model processing error: {e}")
-    except Exception as e:
-        logger.error(f"An unexpected error occurred during inference: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error during inference: {e}")
+        class ImageUrl(BaseModel):
+            url: str
 
-@app.get("/", summary="API Root/Health Check")
-async def root():
-    """Basic health check. Returns ready status only if the model is loaded."""
-    if not is_model_ready():
-        # This state should ideally not be hit if readiness probe is working
-        return {"status": "loading","message": f"SmolVLM API ({MODEL_ID}) is initializing..."}
-    return {"status": "ready", "message": f"SmolVLM API ({MODEL_ID}) is running"}
+        class ChatMessageContentPartImageURL(BaseModel):
+            type: str = "image_url"
+            image_url: ImageUrl
 
-# --- Server Startup ---
-# Uvicorn runs via the 'exec' command in the main container args block
+        class ChatMessage(BaseModel):
+            role: str
+            content: Union[str, List[Union[ChatMessageContentPartText, ChatMessageContentPartImageURL]]]
 
-EOF
+        class ChatCompletionRequest(BaseModel):
+            model: str
+            messages: List[ChatMessage]
+            temperature: Optional[float] = 0.7
+            max_tokens: Optional[int] = 500
+            stream: Optional[bool] = False
 
-        # 6. Start the Application
+        class ModelCard(BaseModel):
+            id: str
+            object: str = "model"
+            created: int = Field(default_factory=lambda: int(time.time()))
+            owned_by: str = "akash-deployment"
+
+        class ModelList(BaseModel):
+            object: str = "list"
+            data: List[ModelCard]
+
+        @app.get("/v1/models", response_model=ModelList, summary="List Available Models")
+        async def list_models():
+            if not is_model_ready():
+                 logger.warning("`/v1/models` called but model is not ready.")
+                 return ModelList(data=[])
+            model_card = ModelCard(id=MODEL_ID)
+            return ModelList(data=[model_card])
+
+        @app.post("/v1/chat/completions", summary="Handle VLM Chat Completions")
+        async def create_chat_completion(request: ChatCompletionRequest):
+            if not is_model_ready():
+                logger.error("Chat completion request received, but model is not ready.")
+                raise HTTPException(status_code=503, detail="Model is not ready. Please try again shortly.")
+
+            if request.stream:
+                raise HTTPException(status_code=400, detail="Streaming generation is not supported.")
+
+            if request.model != MODEL_ID:
+                 logger.warning(f"Request model '{request.model}' does not match loaded model '{MODEL_ID}'. Processing anyway.")
+
+            formatted_messages = []
+            for msg in request.messages:
+                if isinstance(msg.content, str):
+                    formatted_messages.append({"role": msg.role, "content": msg.content})
+                else:
+                    content_parts = []
+                    for part in msg.content:
+                         content_parts.append(get_model_dump(part))
+                    formatted_messages.append({"role": msg.role, "content": content_parts})
+
+            try:
+                logger.info(f"Generating completion for model: {request.model}")
+
+                completion = llm.create_chat_completion(
+                    messages=formatted_messages,
+                    temperature=request.temperature,
+                    max_tokens=request.max_tokens,
+                )
+
+                logger.info("Successfully generated completion.")
+
+                return JSONResponse(content=completion)
+
+            except ValueError as e:
+                logger.error(f"Value error during inference: {e}", exc_info=True)
+                raise HTTPException(status_code=400, detail=f"Invalid request data or model processing error: {e}")
+            except Exception as e:
+                logger.error(f"An unexpected error occurred during inference: {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail=f"Internal server error during inference: {e}")
+
+        @app.get("/", summary="API Root/Health Check")
+        async def root():
+            if not is_model_ready():
+                return {"status": "loading","message": f"SmolVLM API ({MODEL_ID}) is initializing..."}
+            return {"status": "ready", "message": f"SmolVLM API ({MODEL_ID}) is running"}
+        EOF
         echo ">>> Starting Uvicorn server (main container)..."
-        # Use exec to replace the shell process with the uvicorn process
         exec uvicorn app:app --host 0.0.0.0 --port 8000 --forwarded-allow-ips '*' --proxy-headers
-
-    # Define the volume mount for the models
     volumes:
       - name: model-storage
         mount: /models
-        readOnly: false # Main container needs read access; potentially write for logs if directed here? Keep false for simplicity.
-
-    # --- Init Container for Downloading Models ---
+        readOnly: false
     init:
-      image: alpine/curl # Lightweight image with curl
-      # Init container inherits SDL-level environment variables (GGUF_CID, MMPROJ_CID, IPFS_GATEWAY)
+      image: alpine/curl
       command: ["sh", "-c"]
       args:
         - |
           set -e
           echo "--- Init Container: Starting Model Download ---"
-          DEST_DIR="/init-models" # Corresponds to the mount path below
+          DEST_DIR="/init-models"
           mkdir -p $DEST_DIR
 
-          # Use environment variables passed from SDL root or deployment command
           echo "IPFS Gateway: $IPFS_GATEWAY"
           echo "GGUF CID: $GGUF_CID"
           echo "MMPROJ CID: $MMPROJ_CID"
@@ -305,91 +238,72 @@ EOF
           curl -Lf --retry 5 --retry-delay 10 "$MMPROJ_URL" -o "$MMPROJ_DEST" || { echo "Failed to download MMPROJ file"; exit 1; }
 
           echo "--- Init Container: Model Download Complete ---"
-          ls -lh $DEST_DIR # List downloaded files for verification
-      # Define the volume mount for the init container (needs write access)
+          ls -lh $DEST_DIR
       volumes:
-        - name: model-storage # Must match the name used in the main container
-          mount: /init-models # Mount path inside the init container
-          readOnly: false # Init container needs to write the downloaded files
-
+        - name: model-storage
+          mount: /init-models
+          readOnly: false
     expose:
-      - port: 8000 # The internal port the application listens on
-        as: 80      # The internal port Kubernetes service will target
+      - port: 8000
+        as: 80
         to:
-          - global: true # Expose this service globally via Akash gateway
-        # Add HTTP options including Liveness and Readiness Probes
+          - global: true
         httpOptions:
-          maxBodySize: 1048576        # Default
-          readTimeout: 60000          # Default
-          sendTimeout: 60000          # Default
-          nextTries: 3                # Default
-          nextTimeout: 60000          # Default
-          nextCases: ["error", "timeout"] # Default
-        # Readiness Probe: Checks if the application is ready to serve requests (model loaded)
+          maxBodySize: 1048576
+          readTimeout: 60000
+          sendTimeout: 60000
+          nextTries: 3
+          nextTimeout: 60000
+          nextCases: ["error", "timeout"]
         readinessProbe:
           httpGet:
-            path: "/"                 # Use the root endpoint which checks is_model_ready()
-            port: 8000                # Internal application port
-          initialDelaySeconds: 45     # Wait longer before first probe (allow time for download + model load)
-          periodSeconds: 15           # Check every 15 seconds
-          timeoutSeconds: 10          # Probe timeout
-          successThreshold: 1         # One success = ready
-          failureThreshold: 6         # 6 failures = not ready (adjust based on load time)
-        # Liveness Probe: Checks if the application is still running
+            path: "/"
+            port: 8000
+          initialDelaySeconds: 45
+          periodSeconds: 15
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: "/"                 # Can use the same endpoint
-            port: 8000                # Internal application port
-          initialDelaySeconds: 90     # Start checks after it should definitely be ready
-          periodSeconds: 30           # Check less frequently than readiness
-          timeoutSeconds: 10          # Probe timeout
-          failureThreshold: 3         # 3 failures = restart container
+            path: "/"
+            port: 8000
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
 
-# --- Shared Volume Definition ---
-# This volume will be backed by the storage requested in the profile.
-# The 'name' here links the mounts in the containers above.
 volumes:
   model-storage:
-    # Size is implicitly determined by the storage request in the profile.
-    # persistent: false # Ephermal storage is default and usually fine for models downloaded each deployment
 
 profiles:
   compute:
-    smolvlm-api: # Profile name matches the service name
+    smolvlm-api:
       resources:
         cpu:
-          units: 4.0 # Adjust CPU based on observed load
+          units: 1.0
         memory:
-          size: 16Gi # P100 often has 16GB VRAM, ensure enough system RAM too
+          size: 8Gi
         storage:
-          # Ensure enough storage for base image, CUDA, Python env, AND the downloaded models
-          - size: 80Gi # Keep generous storage for models + OS + env
+          - size: 30Gi
         gpu:
-          units: 1 # Request exactly one GPU
+          units: 1
           attributes:
-            vendor: nvidia
-            # --- Specify the exact GPU model ---
-            model: p100
-            # ram: 16Gi # Optional: More specific VRAM match
-            # cuda_version: "11.8" # Optional: Minimum CUDA version
+            vendor:
+              nvidia:
+                - model: p100
+                  ram: 16Gi
+                  interface: pcie
 
   placement:
-    akash: # Standard placement profile name
-      attributes:
-        # host: akash # Optional: Provider attributes
-      signedBy:
-        anyOf:
-          - "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63"
-          # - "..." # Add other trusted Akash auditors if desired
+    dcloud:
       pricing:
-        smolvlm-api: # Matches compute profile name
-          # --- SET YOUR MAXIMUM PRICE ---
-          denom: uakt
-          # Adjust based on current market rates for P100 + resources
-          amount: 15000 # Example: 15000 uakt/block
+        smolvlm-api:
+          denom: ibc/170C677610AC31DF0904FFE09CD3B5C657492170E7E52372E48756B71E56F2F1
+          amount: 15000
 
 deployment:
-  smolvlm-api: # Matches service name
-    akash: # Matches placement profile name
-      profile: smolvlm-api # Matches compute profile name
-      count: 1 # Deploy one instance of the service
+  smolvlm-api:
+    dcloud:
+      profile: smolvlm-api
+      count: 1
