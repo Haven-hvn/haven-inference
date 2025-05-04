@@ -30,7 +30,7 @@ services:
         cat <<'EOF' > requirements.txt
         fastapi>=0.95.0
         uvicorn[standard]>=0.21.1
-        llama-cpp-python[server]>=0.2.59
+        llama-cpp-python[server]==0.2.59 --only-binary=llama-cpp-python
         pydantic>=1.10,<2.0
         python-dotenv
         starlette
@@ -39,7 +39,11 @@ services:
         echo ">>> Installing Python dependencies (main container)..."
         export PIP_ROOT_USER_ACTION=ignore
         pip install --upgrade pip
-        pip install -r requirements.txt
+        echo ">>> Configuring CUDA compatibility..."
+        export CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+        export FORCE_CMAKE=1
+        export LLAMA_CUDA=1
+        pip install --no-cache-dir --verbose -r requirements.txt
         echo ">>> Creating app.py (main container)..."
         cat <<'EOF' > app.py
         import os
