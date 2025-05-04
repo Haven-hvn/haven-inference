@@ -13,12 +13,12 @@ services:
       - MODEL_ID=smolvlm-v1.8b-gguf
       - HOST=0.0.0.0
       - PORT=8000
-      - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci    # <-- REPLACE OR OVERRIDE
-      - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe # <-- REPLACE OR OVERRIDE
+      - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci    # VERIFY THIS CID
+      - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe # VERIFY THIS CID
       - IPFS_GATEWAY=.ipfs.w3s.link
     command: ["sh", "-c"]
     args:
-      - >-
+      - |-
         set -e
         echo ">>> Installing system dependencies (main container)..."
         apt-get update
@@ -207,7 +207,7 @@ services:
       image: alpine/curl
       command: ["sh", "-c"]
       args:
-        - |
+        - |-
           set -e
           echo "--- Init Container: Starting Model Download ---"
           DEST_DIR="/init-models"
@@ -291,12 +291,15 @@ profiles:
           attributes:
             vendor:
               nvidia:
+                - model: rtx3070
+                  ram: 8Gi
+                  interface: pcie
 
   placement:
     bdl:
       pricing:
         smolvlm-api:
-          denom: akt
+          denom: uakt
           amount: 1000000
 
 deployment:
