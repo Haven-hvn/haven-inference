@@ -291,19 +291,16 @@ profiles:
           attributes:
             vendor:
               nvidia:
-                - model: p100
-                  ram: 16Gi
-                  interface: pcie
 
   placement:
-    dcloud:
+    bdl:
       pricing:
         smolvlm-api:
-          denom: ibc/170C677610AC31DF0904FFE09CD3B5C657492170E7E52372E48756B71E56F2F1
-          amount: 15000
+          denom: akt
+          amount: 1000000
 
 deployment:
   smolvlm-api:
-    dcloud:
+    bdl:
       profile: smolvlm-api
       count: 1
