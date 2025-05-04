@@ -291,9 +291,6 @@ profiles:
           attributes:
             vendor:
               nvidia:
-                - model: rtx3070
-                  ram: 8Gi
-                  interface: pcie
 
   placement:
     bdl:
