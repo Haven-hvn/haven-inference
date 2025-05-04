@@ -254,9 +254,6 @@ services:
           timeoutSeconds: 20
           failureThreshold: 3
 
-volumes:
-  model-storage:
-
 profiles:
   compute:
     smolvlm-api:
