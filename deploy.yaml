@@ -13,20 +13,43 @@ services:
       - MODEL_ID=smolvlm-v1.8b-gguf
       - HOST=0.0.0.0
       - PORT=8000
-      - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci    # VERIFY THIS CID
-      - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe # VERIFY THIS CID
+      - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci
+      - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe
       - IPFS_GATEWAY=.ipfs.w3s.link
     command: ["sh", "-c"]
     args:
       - |-
         set -e
-        echo ">>> Installing system dependencies (main container)..."
+        echo ">>> Creating models directory..."
+        mkdir -p /models
+
+        echo ">>> Installing system dependencies..."
         apt-get update
-        apt-get install -y --no-install-recommends build-essential cmake python3-pip ca-certificates git
-        echo ">>> Creating directories (main container)..."
+        apt-get install -y --no-install-recommends build-essential cmake python3-pip ca-certificates git curl
+        
+        echo ">>> Downloading model files..."
+        GGUF_URL="https://${GGUF_CID}${IPFS_GATEWAY}"
+        MMPROJ_URL="https://${MMPROJ_CID}${IPFS_GATEWAY}"
+        
+        curl -Lf --retry 5 --retry-delay 10 "${GGUF_URL}" -o "${MODEL_PATH}" || {
+            echo "!! GGUF download failed! Contents of /models: $(ls -lh /models)" 1>&2
+            exit 1
+        }
+        
+        curl -Lf --retry 5 --retry-delay 10 "${MMPROJ_URL}" -o "${MMPROJ_PATH}" || {
+            echo "!! MMPROJ download failed! Contents of /models: $(ls -lh /models)" 1>&2
+            exit 1
+        }
+        
+        echo ">>> Verifying downloads..."
+        ls -lh /models
+        [ -f "${MODEL_PATH}" ] || { echo "Model file missing!"; exit 1; }
+        [ -f "${MMPROJ_PATH}" ] || { echo "MMPROJ file missing!"; exit 1; }
+        
+        echo ">>> Setting up app..."
         mkdir -p /app
         cd /app
-        echo ">>> Creating requirements.txt (main container)..."
+        
         cat <<'EOF' > requirements.txt
         fastapi>=0.95.0
         uvicorn[standard]>=0.21.1
@@ -37,10 +60,9 @@ services:
         starlette
         py-cpuinfo
         EOF
-        echo ">>> Installing Python dependencies (main container)..."
+        
         export PIP_ROOT_USER_ACTION=ignore
         pip install --upgrade pip
-        echo ">>> Configuring CUDA compatibility..."
         export CMAKE_ARGS="-DLLAMA_CUBLAS=on"
         export FORCE_CMAKE=1
         export LLAMA_CUDA=1
@@ -208,46 +230,6 @@ services:
       - name: model-storage
         mount: /models
         readOnly: false
-    init:
-      image: alpine/curl
-      command: ["sh", "-c"]
-      args:
-        - |-
-          set -e
-          echo "--- Init Container: Starting Model Download ---"
-          DEST_DIR="/init-models"
-          mkdir -p $DEST_DIR
-
-          echo "IPFS Gateway: $IPFS_GATEWAY"
-          echo "GGUF CID: $GGUF_CID"
-          echo "MMPROJ CID: $MMPROJ_CID"
-
-          if [ -z "$GGUF_CID" ] || [ "$GGUF_CID" = "YOUR_GGUF_MODEL_CID_HERE" ]; then
-            echo "Error: GGUF_CID environment variable is not set or is placeholder."
-            exit 1
-          fi
-          if [ -z "$MMPROJ_CID" ] || [ "$MMPROJ_CID" = "YOUR_MMPROJ_FILE_CID_HERE" ]; then
-            echo "Error: MMPROJ_CID environment variable is not set or is placeholder."
-            exit 1
-          fi
-
-          GGUF_URL="https://$GGUF_CID$IPFS_GATEWAY"
-          MMPROJ_URL="https://$MMPROJ_CID$IPFS_GATEWAY"
-
-          GGUF_DEST="$DEST_DIR/smolvlm.f16.gguf"
-          MMPROJ_DEST="$DEST_DIR/mmproj-smolvlm.f16.gguf"
-
-          echo "Downloading GGUF model from $GGUF_URL to $GGUF_DEST ..."
-          curl -Lf --retry 5 --retry-delay 10 "$GGUF_URL" -o "$GGUF_DEST" || { echo "Failed to download GGUF model"; exit 1; }
-          echo "Downloading MMPROJ file from $MMPROJ_URL to $MMPROJ_DEST ..."
-          curl -Lf --retry 5 --retry-delay 10 "$MMPROJ_URL" -o "$MMPROJ_DEST" || { echo "Failed to download MMPROJ file"; exit 1; }
-
-          echo "--- Init Container: Model Download Complete ---"
-          ls -lh $DEST_DIR
-      volumes:
-        - name: model-storage
-          mount: /init-models
-          readOnly: false
     expose:
       - port: 8000
         as: 80
@@ -264,18 +246,18 @@ services:
           httpGet:
             path: "/"
             port: 8000
-          initialDelaySeconds: 45
+          initialDelaySeconds: 300  # Increased for download+install time
           periodSeconds: 15
-          timeoutSeconds: 10
+          timeoutSeconds: 20
           successThreshold: 1
           failureThreshold: 6
         livenessProbe:
           httpGet:
             path: "/"
             port: 8000
-          initialDelaySeconds: 90
+          initialDelaySeconds: 400  # Extra buffer after readiness probe
           periodSeconds: 30
-          timeoutSeconds: 10
+          timeoutSeconds: 20
           failureThreshold: 3
 
 volumes:
