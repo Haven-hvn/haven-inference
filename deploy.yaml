@@ -30,7 +30,7 @@ services:
         cat <<'EOF' > requirements.txt
         fastapi>=0.95.0
         uvicorn[standard]>=0.21.1
-        llama-cpp-python[server]==0.2.59 --only-binary=llama-cpp-python
+        llama-cpp-python[server]==0.2.59
         pydantic>=1.10,<2.0
         python-dotenv
         starlette
