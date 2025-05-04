@@ -4,7 +4,7 @@ services:
   smolvlm-api:
     image: nvidia/cuda:12.4.0-devel-ubuntu22.04  # Updated CUDA version
     env:
-      - CMAKE_ARGS=-DLLAMA_CUBLAS=on
+      - CMAKE_ARGS=-DGGML_CUDA=on
       - FORCE_CMAKE=1
       - MODEL_PATH=/models/smolvlm.f16.gguf
       - MMPROJ_PATH=/models/mmproj-smolvlm.f16.gguf
@@ -51,8 +51,8 @@ services:
         cat <<'EOF' > requirements.txt
         fastapi>=0.95.0
         uvicorn[standard]>=0.21.1
-        llama-cpp-python[server]>=0.2.62  # Updated version for CUDA 12.4
-        pydantic>=1.7.4,<3.0.0
+        llama-cpp-python[server]>=0.2.73  # Updated version for CUDA 12.4
+        pydantic>=2.0.0,<3.0.0
         pydantic-settings>=2.0.0
         python-dotenv
         starlette
@@ -61,7 +61,7 @@ services:
         
         export PIP_ROOT_USER_ACTION=ignore
         pip install --upgrade pip
-        export CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+        export CMAKE_ARGS="-DGGML_CUDA=on -DLLAMA_CUDA_DMMV_X=64 -DLLAMA_CUDA_MMV_Y=4"
         export FORCE_CMAKE=1
         export LLAMA_CUDA=1
         pip install --no-cache-dir --verbose -r requirements.txt
