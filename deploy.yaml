@@ -17,6 +17,11 @@ services:
       - MMPROJ_CID=bafybeihmecaubsqvrnasgzzonrcwrbsuantmapg3vgun4c46mdwnj4m5ie
       - IPFS_GATEWAY=.ipfs.w3s.link
     command: ["sh", "-c"]
+    hostAliases:
+      - ip: "172.64.146.87"
+        hostnames:
+          - "${GGUF_CID}.ipfs.w3s.link"
+          - "${MMPROJ_CID}.ipfs.w3s.link"
     args:
       - |-
         set -e
