@@ -13,8 +13,8 @@ services:
       - MODEL_ID=smolvlm-v1.8b-gguf
       - HOST=0.0.0.0
       - PORT=8000
-      - GGUF_CID=bafybeifukwjxo43moq76cw5rgpumsq6zmrdhfxphcpkhavjno44daf43ci
-      - MMPROJ_CID=bafybeiaugphrjzw36gm2jmdfgcnax35g5sa3nw2l26ugqzpcpludjrsghe
+      - GGUF_CID=bafybeigfny2txfarif2k4tz5xwclxysb2setys4qjf2fjpnhaly3e2f6i4
+      - MMPROJ_CID=bafybeihmecaubsqvrnasgzzonrcwrbsuantmapg3vgun4c46mdwnj4m5ie
       - IPFS_GATEWAY=.ipfs.w3s.link
     command: ["sh", "-c"]
     args:
@@ -26,8 +26,8 @@ services:
         echo ">>> Installing system dependencies..."
         apt-get update
         apt-get install -y --no-install-recommends build-essential cmake python3-pip ca-certificates git curl
-        GGUF_URL="https://${GGUF_CID}${IPFS_GATEWAY}"
-        MMPROJ_URL="https://${MMPROJ_CID}${IPFS_GATEWAY}"
+        GGUF_URL="https://${IPFS_GATEWAY}${GGUF_CID}"
+        MMPROJ_URL="https://${IPFS_GATEWAY}${MMPROJ_CID}"
         echo ">>> Downloading model file...$GGUF_URL" 
         curl -Lf --retry 5 --retry-delay 10 "${GGUF_URL}" -o "${MODEL_PATH}" || {
             echo "!! GGUF download failed! Contents of /models: $(ls -lh /models)" 1>&2
