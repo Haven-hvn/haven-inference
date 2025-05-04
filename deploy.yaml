@@ -26,15 +26,15 @@ services:
         echo ">>> Installing system dependencies..."
         apt-get update
         apt-get install -y --no-install-recommends build-essential cmake python3-pip ca-certificates git curl
-        GGUF_URL="https://${IPFS_GATEWAY}${GGUF_CID}"
-        MMPROJ_URL="https://${IPFS_GATEWAY}${MMPROJ_CID}"
+        GGUF_URL="https://${GGUF_CID}${IPFS_GATEWAY}/${GGUF_CID}/smolvlm.f16.gguf"
+        MMPROJ_URL="https://${MMPROJ_CID}${IPFS_GATEWAY}/${MMPROJ_CID}/"mmproj-SmolVLM-Instruct-f16.gguf
         echo ">>> Downloading model file...$GGUF_URL" 
-        curl -Lf --retry 5 --retry-delay 10 "${GGUF_URL}" -o "${MODEL_PATH}" || {
+        curl -k -Lf --retry 5 --retry-delay 10 "${GGUF_URL}" -o "${MODEL_PATH}" || {
             echo "!! GGUF download failed! Contents of /models: $(ls -lh /models)" 1>&2
             exit 1
         }
         echo ">>> Downloading model file...$MMPROJ_URL"
-        curl -Lf --retry 5 --retry-delay 10 "${MMPROJ_URL}" -o "${MMPROJ_PATH}" || {
+        curl -k -Lf --retry 5 --retry-delay 10 "${MMPROJ_URL}" -o "${MMPROJ_PATH}" || {
             echo "!! MMPROJ download failed! Contents of /models: $(ls -lh /models)" 1>&2
             exit 1
         }
