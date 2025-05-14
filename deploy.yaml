@@ -26,8 +26,8 @@ services:
         echo ">>> Installing system dependencies..."
         apt-get update
         apt-get install -y --no-install-recommends build-essential cmake python3-pip ca-certificates git curl
-        GGUF_URL="https://${GGUF_CID}${IPFS_GATEWAY}"
-        MMPROJ_URL="https://${MMPROJ_CID}${IPFS_GATEWAY}"
+        GGUF_URL="https://f006.backblazeb2.com/b2api/v1/b2_download_file_by_id?fileId=4_z81c5239493d6c7ca9c6f0917_f206db32ae6cb4176_d20250514_m023210_c006_v0601002_t0020_u01747189930776"
+        MMPROJ_URL="https://f006.backblazeb2.com/b2api/v1/b2_download_file_by_id?fileId=4_z81c5239493d6c7ca9c6f0917_f205738cb7ba0162f_d20250514_m022955_c006_v0601002_t0049_u01747189795531"
         echo ">>> Downloading model file...$GGUF_URL" 
         curl -k -Lf --retry 5 --retry-delay 10 "${GGUF_URL}" -o "${MODEL_PATH}" || {
             echo "!! GGUF download failed! Contents of /models: $(ls -lh /models)" 1>&2
