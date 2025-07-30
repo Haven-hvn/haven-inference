@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  smolvlm-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/models/smolvlm.f16.gguf
+      - MMPROJ_PATH=/models/mmproj-smolvlm.f16.gguf
+      - N_GPU_LAYERS=-1
+      - N_CTX=2048
+      - MODEL_ID=smolvlm-v1.8b-gguf
+      - HOST=0.0.0.0
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - models_cache:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+
+volumes:
+  models_cache:
+    driver: local
