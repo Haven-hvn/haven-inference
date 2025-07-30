@@ -12,13 +12,20 @@ ENV PORT=8000
 ENV PYTHONUNBUFFERED=1
 ENV PIP_ROOT_USER_ACTION=ignore
 
-# Install system dependencies required for model serving
+# Install system dependencies required for model serving and ngrok
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     ca-certificates \
     curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Install ngrok
+RUN curl -s https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz -o ngrok.tgz \
+    && tar xvzf ngrok.tgz -C /usr/local/bin \
+    && rm ngrok.tgz \
+    && chmod +x /usr/local/bin/ngrok
 
 # Create application directory
 WORKDIR /app

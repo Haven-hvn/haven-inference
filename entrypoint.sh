@@ -37,6 +37,12 @@ ls -lh /models
 [ -f "${MODEL_PATH}" ] || { echo "Model file missing!"; exit 1; }
 [ -f "${MMPROJ_PATH}" ] || { echo "MMPROJ file missing!"; exit 1; }
 
+echo ">>> Configuring ngrok authtoken..."
+ngrok config add-authtoken "${NGROK_AUTHTOKEN}"
+
+echo ">>> Starting ngrok tunnel..."
+ngrok http --log=stdout "${PORT}" &
+
 echo ">>> Starting SmolVLM API server..."
 cd /app
 exec uvicorn app:app --host "${HOST}" --port "${PORT}" --forwarded-allow-ips '*' --proxy-headers
